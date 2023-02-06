@@ -4,7 +4,6 @@ use crate::board::position::*;
 use crate::cache::*;
 use crate::r#move::encode::*;
 use crate::search::*;
-use crate::interface::SUPPORTED_VARIANTS;
 
 use std::time::{UNIX_EPOCH, SystemTime};
 
@@ -380,14 +379,11 @@ pub fn parse_option(cmd: &str) {
         if split_cmd.next().unwrap_or_else(error) == "value" {
             // check if variant in SUPPORTED_VARIANTS list
             let variant = split_cmd.next().unwrap_or_else(error);
-            if SUPPORTED_VARIANTS.contains(&variant) {
-                match variant {
-                    "antichess" | "suicide" | "giveaway" => unsafe { OPTIONS.variant = Variant::Suicide },
-                    "3check" | "three-check" => unsafe { OPTIONS.variant = Variant::ThreeCheck }
-                    _ => (),
-                }
-            } else {
-                println!("info string Unknown variant given");
+            match variant {
+                "antichess" | "suicide" | "giveaway" => unsafe { OPTIONS.variant = Variant::Suicide },
+                "3check" | "three-check" => unsafe { OPTIONS.variant = Variant::ThreeCheck },
+                "racingkings" => unsafe { OPTIONS.variant = Variant::RacingKings },
+                _ => println!("info string Unknown variant given")
             }
         }
     } else {

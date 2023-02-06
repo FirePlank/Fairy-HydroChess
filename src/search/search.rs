@@ -3,8 +3,7 @@ use crate::r#move::encode::*;
 use crate::r#move::movegen::*;
 use crate::evaluation::*;
 use crate::cache::*;
-use crate::variants::antichess;
-use crate::variants::threecheck;
+use crate::variants::{racingkings, antichess, threecheck};
 use std::mem::MaybeUninit;
 
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -374,7 +373,8 @@ impl Searcher {
                 Variant::Standard => evaluate(position),
                 Variant::Suicide => antichess::evaluate(position),
                 Variant::Chess960 => evaluate(position),
-                Variant::ThreeCheck => threecheck::evaluate(position)
+                Variant::ThreeCheck => threecheck::evaluate(position),
+                Variant::RacingKings => racingkings::evaluate(position)
             };
         }
 
@@ -440,7 +440,8 @@ impl Searcher {
             Variant::Standard => evaluate(position),
             Variant::Suicide => antichess::evaluate(position),
             Variant::Chess960 => evaluate(position),
-            Variant::ThreeCheck => threecheck::evaluate(position)
+            Variant::ThreeCheck => threecheck::evaluate(position),
+            Variant::RacingKings => racingkings::evaluate(position)
         };
 
         if !in_check && !pv_node {
@@ -651,6 +652,34 @@ impl Searcher {
             // if you have no pieces left or you stalemate, you win
             if legal_moves == 0 {
                 return MATE_VALUE-self.ply as i16;
+            }
+        } else if variant == &Variant::RacingKings {
+            // no legal moves means stalemate since there is no checkmate in racing kings
+            if legal_moves == 0 {
+                return 0;
+            }
+
+            // if both kings on 8th, its draw
+            let black_idx = position.bitboards[Piece::BlackKing as usize].ls1b() as usize;
+            if black_idx < 8 {
+                if position.side == 0 {
+                    return -MATE_VALUE+self.ply as i16;
+                } else {
+                    if (position.bitboards[Piece::WhiteKing as usize].ls1b() as usize) < 8 {
+                        return 0;
+                    } else {
+                        return MATE_VALUE-self.ply as i16;
+                    }
+                }
+            } else if (position.bitboards[Piece::WhiteKing as usize].ls1b() as usize) < 8 {
+                // if black king is not on 7th, return mate due to black not making it to 8th in time
+                if position.side == 0 {
+                    if black_idx >= 16 {
+                        return MATE_VALUE-self.ply as i16;
+                    } else {
+                        return 0;
+                    }
+                } 
             }
         } else {
             if legal_moves == 0 {

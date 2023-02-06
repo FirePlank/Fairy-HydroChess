@@ -36,7 +36,7 @@ pub fn evaluate(position: &Position) -> i16 {
     if phase {
         // add material score
         score += position.material_scores[0][1] - position.material_scores[1][1]; 
-        // add piece square table scoreimage.pngfuu
+        // add piece square table score
         score += position.pst_scores[0][1] - position.pst_scores[1][1];
         // add double pawn score
         score += (position.bitboards[0].0 & position.bitboards[0].0 << 8).count_ones() as i16 * DOUBLED_PAWN_ENDING - 

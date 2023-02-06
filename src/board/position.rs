@@ -95,7 +95,8 @@ pub enum Variant {
     Standard,
     Suicide,
     Chess960,
-    ThreeCheck
+    ThreeCheck,
+    RacingKings
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -469,6 +470,7 @@ impl Position {
                 }
             }
         }
+        
         // handle pawn promotions
         if promoted != 0 {
             // erase the pawn from the target square and remove from hash key
@@ -731,49 +733,89 @@ impl Position {
 
         if self.side == 0 {
             self.fullmove += 1;
-            if unsafe { OPTIONS.variant == Variant::Suicide} {
-                return true;
-                // // if side has no pieces, the game is over
-                // if self.occupancies[Side::WHITE].is_empty() {
-                //     return false;
-                // } else {
-                //     return true;
-                // }
-            }
 
-            // check if the move is illegal
-            if self.is_attacked(self.bitboards[Piece::BlackKing as usize].ls1b() as usize, 0) {
-                // move is illegal
-                return false;
-            }
+            match unsafe { &OPTIONS.variant } {
+                Variant::Suicide => return true,
+                Variant::ThreeCheck => {
+                    // check if the move is illegal
+                    if self.is_attacked(self.bitboards[Piece::BlackKing as usize].ls1b() as usize, 0) {
+                        // move is illegal
+                        return false;
+                    }
+                    
+                    // if 3 checks have been achieved, the game is over
+                    if self.checks[1] >= 3 {
+                        return false;
+                    }
+                }, 
+                Variant::Standard => {
+                    // check if the move is illegal
+                    if self.is_attacked(self.bitboards[Piece::BlackKing as usize].ls1b() as usize, 0) {
+                        // move is illegal
+                        return false;
+                    }
+                },
+                Variant::RacingKings => {
+                    // check if the move is illegal
+                    if self.is_attacked(self.bitboards[Piece::BlackKing as usize].ls1b() as usize, 0) {
+                        // move is illegal
+                        return false;
+                    }
 
-            if unsafe { OPTIONS.variant == Variant::ThreeCheck } {
-                // if 3 checks have been achieved, the game is over
-                if self.checks[1] >= 3 {
-                    return false;
-                }
+                    // no checks are allowed in racing kings
+                    if self.is_attacked(self.bitboards[Piece::WhiteKing as usize].ls1b() as usize, 1) {
+                        // move is illegal
+                        return false;
+                    }
+
+                    // game is over if white king is on the 8th rank and black is not
+                    if (self.bitboards[Piece::WhiteKing as usize].ls1b() as usize) < 8 && (self.bitboards[Piece::BlackKing as usize].ls1b() as usize) >= 8 {
+                        return false;
+                    }
+                },
+                _ => todo!()
             }
         } else {
-            if unsafe { OPTIONS.variant == Variant::Suicide} {
-                // if self.occupancies[Side::BLACK].is_empty() {
-                //     return false;
-                // } else {
-                //     return true;
-                // }
-                return true;
-            }
+            match unsafe { &OPTIONS.variant } {
+                Variant::Suicide => return true,
+                Variant::ThreeCheck => {
+                    // check if the move is illegal
+                    if self.is_attacked(self.bitboards[Piece::WhiteKing as usize].ls1b() as usize, 1) {
+                        // move is illegal
+                        return false;
+                    }
 
-            // check if the move is illegal
-            if self.is_attacked(self.bitboards[Piece::WhiteKing as usize].ls1b() as usize, 1) {
-                // move is illegal
-                return false;
-            }
+                    // if 3 checks have been achieved, the game is over
+                    if self.checks[1] >= 3 {
+                        return false;
+                    }
+                }, 
+                Variant::Standard => {
+                    // check if the move is illegal
+                    if self.is_attacked(self.bitboards[Piece::WhiteKing as usize].ls1b() as usize, 1) {
+                        // move is illegal
+                        return false;
+                    }
+                },
+                Variant::RacingKings => {
+                    // check if the move is illegal
+                    if self.is_attacked(self.bitboards[Piece::WhiteKing as usize].ls1b() as usize, 1) {
+                        // move is illegal
+                        return false;
+                    }
 
-            if unsafe { OPTIONS.variant == Variant::ThreeCheck } {
-                // if 3 checks have been achieved, the game is over
-                if self.checks[0] >= 3 {
-                    return false;
-                }
+                    // check if the move is illegal
+                    if self.is_attacked(self.bitboards[Piece::BlackKing as usize].ls1b() as usize, 0) {
+                        // move is illegal
+                        return false;
+                    }
+
+                    // game is over if black or white king is on the 8th rank
+                    if (self.bitboards[Piece::BlackKing as usize].ls1b() as usize) < 8 {
+                        return false;
+                    }
+                },
+                _ => todo!()
             }
         }
 
@@ -1115,20 +1157,24 @@ impl Position {
                 for i in x.chars() {
                     // convert Shredder-FEN to FEN
                     let char;
-                    let king_file = position.bitboards[Piece::WhiteKing as usize].ls1b() % 8;
-                    if i.is_uppercase() && (i != 'K' || i != 'Q') {
-                        // check if file is lower than king
-                        if i as isize - 65 < king_file {
-                            char = 'Q';
+                    if unsafe { OPTIONS.variant == Variant::Chess960 } {
+                        let king_file = position.bitboards[Piece::WhiteKing as usize].ls1b() % 8;
+                        if i.is_uppercase() && (i != 'K' || i != 'Q') {
+                            // check if file is lower than king
+                            if i as isize - 65 < king_file {
+                                char = 'Q';
+                            } else {
+                                char = 'K';
+                            }
+                        } else if i != 'k' || i != 'q' {
+                            // check if file is lower than king
+                            if i as isize - 97 < king_file {
+                                char = 'q';
+                            } else {
+                                char = 'k';
+                            }
                         } else {
-                            char = 'K';
-                        }
-                    } else if i != 'k' || i != 'q' {
-                        // check if file is lower than king
-                        if i as isize - 97 < king_file {
-                            char = 'q';
-                        } else {
-                            char = 'k';
+                            char = i;
                         }
                     } else {
                         char = i;

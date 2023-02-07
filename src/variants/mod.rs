@@ -7,3 +7,6 @@ pub use threecheck::*;
 
 pub mod racingkings;
 pub use racingkings::*;
+
+pub mod chess960;
+pub use chess960::*;

@@ -654,13 +654,21 @@ impl Searcher {
                 return MATE_VALUE-self.ply as i16;
             }
         } else if variant == &Variant::RacingKings {
-            // no legal moves means stalemate since there is no checkmate in racing kings
-            if legal_moves == 0 {
-                return 0;
-            }
-
             // if both kings on 8th, its draw
             let black_idx = position.bitboards[Piece::BlackKing as usize].ls1b() as usize;
+
+            // no legal moves means stalemate as long as no kings are on the 8th ran
+            // since there is no checkmate in racing kings
+            if legal_moves == 0 {
+                if black_idx < 8 && (position.bitboards[Piece::WhiteKing as usize].ls1b() as usize) < 8 {
+                    return 0;
+                } else if black_idx < 8 || (position.bitboards[Piece::WhiteKing as usize].ls1b() as usize) < 8 {
+                    return -MATE_VALUE+self.ply as i16;
+                } else {
+                    return 0;
+                }
+            }
+
             if black_idx < 8 {
                 if position.side == 0 {
                     return -MATE_VALUE+self.ply as i16;

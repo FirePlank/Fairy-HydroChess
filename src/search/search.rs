@@ -374,7 +374,8 @@ impl Searcher {
                 Variant::Suicide => antichess::evaluate(position),
                 Variant::Chess960 => evaluate(position),
                 Variant::ThreeCheck => threecheck::evaluate(position),
-                Variant::RacingKings => racingkings::evaluate(position)
+                Variant::RacingKings => racingkings::evaluate(position),
+                Variant::Crazyhouse => todo!()
             };
         }
 
@@ -441,7 +442,8 @@ impl Searcher {
             Variant::Suicide => antichess::evaluate(position),
             Variant::Chess960 => evaluate(position),
             Variant::ThreeCheck => threecheck::evaluate(position),
-            Variant::RacingKings => racingkings::evaluate(position)
+            Variant::RacingKings => racingkings::evaluate(position),
+            Variant::Crazyhouse => todo!()
         };
 
         if !in_check && !pv_node {
@@ -715,7 +717,7 @@ impl Searcher {
         return alpha;
     }
 
-    fn assign_move_scores(&mut self, position: &Position, moves: [u32; 256], move_scores: &mut [u32; 256], moves_count: usize) {
+    fn assign_move_scores(&mut self, position: &Position, moves: [u32; 447], move_scores: &mut [u32; 256], moves_count: usize) {
         for move_index in 0..moves_count {
             let r#move = moves[move_index];
             move_scores[move_index] = self.score_move(position, r#move);

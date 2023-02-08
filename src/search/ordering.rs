@@ -28,7 +28,7 @@ pub const MVV_LVA: [[u16;6];6] = [
 ];
 
 impl Searcher {
-    pub fn sort_next_move(&self, moves: &mut [u32; 256], move_scores: &mut [u32; 256], start_index: usize, moves_count: usize) -> u32 {
+    pub fn sort_next_move(&self, moves: &mut [u32; 447], move_scores: &mut [u32; 256], start_index: usize, moves_count: usize) -> u32 {
         let mut best_score = move_scores[start_index];
         let mut best_index = start_index;
     

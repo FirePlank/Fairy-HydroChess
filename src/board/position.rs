@@ -24,11 +24,12 @@ pub enum Square {
 // square string list
 #[allow(dead_code)]
 #[rustfmt::skip]
-pub const SQUARE_COORDS: [&str; 64] = [
+pub const SQUARE_COORDS: [&str; 65] = [
     "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8", "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7",
     "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6", "a5", "b5", "c5", "d5", "e5", "f5", "g5", "h5",
     "a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4", "a3", "b3", "c3", "d3", "e3", "f3", "g3", "h3",
     "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2", "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1",
+    "NoSquare",
 ];
 
 // ASCII pieces
@@ -66,7 +67,7 @@ const CASTLING_RIGHTS: [u8; 64] = [
 ];
 
 // pieces
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Piece {
     WhitePawn,
     WhiteKnight,
@@ -79,7 +80,7 @@ pub enum Piece {
     BlackBishop,
     BlackRook,
     BlackQueen,
-    BlackKing,
+    BlackKing
 }
 pub enum PieceType {
     PAWN,
@@ -96,7 +97,8 @@ pub enum Variant {
     Suicide,
     Chess960,
     ThreeCheck,
-    RacingKings
+    RacingKings,
+    Crazyhouse
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -121,13 +123,14 @@ pub struct Position {
     pub halfmove_clocks_stack: Vec<u16>,
     pub captured_pieces_stack: Vec<u8>,
     pub castling_rights_stack: Vec<u8>,
-    pub rook_positions_stack: Vec<usize>, // <--- for castling in Chess960 to keep track of rook positions
+    // pub rook_positions_stack: Vec<usize>, // <--- for castling in Chess960 to keep track of rook positions
     pub en_passant_stack: Vec<Square>,
     pub hash_stack: Vec<u64>,
     pub material_scores: [[i16; 2]; 2],
     pub pst_scores: [[i16; 2]; 2],
     pub mobility: [i16; 12],
-    pub checks: [usize; 2]  // <-- for three check variant
+    pub checks: [usize; 2],  // <-- for three check variant
+    pub bank: [usize; 12] // <-- for keeping track of pieces in hand for crazyhouse variant
 }
 
 impl Position {
@@ -162,13 +165,14 @@ impl Position {
             halfmove_clocks_stack: Vec::with_capacity(32),
             captured_pieces_stack: Vec::with_capacity(32),
             castling_rights_stack: Vec::with_capacity(32),
-            rook_positions_stack: Vec::with_capacity(32), // <--- for castling in Chess960 to keep track of rook positions
+            // rook_positions_stack: Vec::with_capacity(32), // <--- for castling in Chess960 to keep track of rook positions
             en_passant_stack: Vec::with_capacity(32),
             hash_stack: Vec::with_capacity(32),
             material_scores: [[0; 2]; 2],
             pst_scores: [[0; 2]; 2],
             mobility: [0; 12],
-            checks: [0; 2]  // <-- for three check variant
+            checks: [0; 2],  // <-- for three check variant
+            bank: [0; 12] // <-- for keeping track of pieces in hand for crazyhouse variant
         };
         pos.hash = pos.generate_hash_key();
         init_calculation(&mut pos);
@@ -188,13 +192,14 @@ impl Position {
             halfmove_clocks_stack: vec![],
             captured_pieces_stack: vec![],
             castling_rights_stack: vec![],
-            rook_positions_stack: vec![],
+            // rook_positions_stack: vec![],
             en_passant_stack: vec![],
             hash_stack: vec![],
             material_scores: [[0; 2]; 2],
             pst_scores: [[0; 2]; 2],
             mobility: [0; 12],
-            checks: [0; 2]
+            checks: [0; 2],
+            bank: [0; 12]
         }
     }
 
@@ -244,13 +249,13 @@ impl Position {
         return true;
     }
     // Moves `piece` from the field specified by `from` to the field specified by `to` with the specified `color`, also updates occupancy and incremental values.
-    pub fn move_piece(&mut self, color: u8, piece: u8, from: usize, to: usize) {
-        //self.pieces[color as usize][piece as usize] ^= (1u64 << from) | (1u64 << to);
-        self.occupancies[color as usize].0 ^= (1u64 << from) | (1u64 << to);
+    pub fn move_piece(&mut self, color: u8, piece: u8, to: usize, from: usize) {
+        //self.pieces[color as usize][piece as usize] ^= (1u64 << to) | (1u64 << from);
+        self.occupancies[color as usize].0 ^= (1u64 << to) | (1u64 << from);
 
         // piece table
-        self.bitboards[piece as usize].pop(to);
-        self.bitboards[piece as usize].set(from);
+        self.bitboards[piece as usize].pop(from);
+        self.bitboards[piece as usize].set(to);
 
         // -6 the piece index if its black
         let both = Bitboard(self.occupancies[0].0 | self.occupancies[1].0);
@@ -271,10 +276,10 @@ impl Position {
 
 
             let index = (piece - 6) as usize;
-            self.pst_scores[color as usize][0] -= PSQT[index][to^56];
-            self.pst_scores[color as usize][1] -= PSQT_EG[index][to^56];
-            self.pst_scores[color as usize][0] += PSQT[index][from^56];
-            self.pst_scores[color as usize][1] += PSQT_EG[index][from^56];
+            self.pst_scores[color as usize][0] -= PSQT[index][from^56];
+            self.pst_scores[color as usize][1] -= PSQT_EG[index][from^56];
+            self.pst_scores[color as usize][0] += PSQT[index][to^56];
+            self.pst_scores[color as usize][1] += PSQT_EG[index][to^56];
         } else {
             match piece as usize {
                 // mobility
@@ -290,10 +295,10 @@ impl Position {
                 _ => ()
             }
 
-            self.pst_scores[color as usize][0] -= PSQT[piece as usize][to];
-            self.pst_scores[color as usize][1] -= PSQT_EG[piece as usize][to];
-            self.pst_scores[color as usize][0] += PSQT[piece as usize][from];
-            self.pst_scores[color as usize][1] += PSQT_EG[piece as usize][from];
+            self.pst_scores[color as usize][0] -= PSQT[piece as usize][from];
+            self.pst_scores[color as usize][1] -= PSQT_EG[piece as usize][from];
+            self.pst_scores[color as usize][0] += PSQT[piece as usize][to];
+            self.pst_scores[color as usize][1] += PSQT_EG[piece as usize][to];
         }
     }
 
@@ -413,20 +418,31 @@ impl Position {
         //     self.enpassant = Square::NoSquare;
         // }
 
-        // move piece
-        self.move_piece(
-            self.side as u8,
-            piece as u8,
-            target_square as usize,
-            source_square as usize,
-        );
 
-        // hash piece
-        unsafe {
-            // remove piece from source square in hash key
-            self.hash ^= ZOBRIST_KEYS[piece as usize][source_square as usize];
-            // add piece to target square in hash key
-            self.hash ^= ZOBRIST_KEYS[piece as usize][target_square as usize];
+        if unsafe { OPTIONS.variant == Variant::Crazyhouse } && source_square == Square::NoSquare as u8 {
+            // add piece from hand
+            self.add_piece(self.side as u8, piece as u8, target_square as u8);
+            self.bank[piece as usize] -= 1;
+            // hash piece
+            unsafe {
+                self.hash ^= ZOBRIST_KEYS[piece as usize][target_square as usize];
+            }
+        } else {
+            // move piece
+            self.move_piece(
+                self.side as u8,
+                piece as u8,
+                target_square as usize,
+                source_square as usize,
+            );
+
+            // hash piece
+            unsafe {
+                // remove piece from source square in hash key
+                self.hash ^= ZOBRIST_KEYS[piece as usize][source_square as usize];
+                // add piece to target square in hash key
+                self.hash ^= ZOBRIST_KEYS[piece as usize][target_square as usize];
+            }
         }
 
         // update scores
@@ -460,6 +476,8 @@ impl Position {
                 if self.bitboards[bb_piece].get(target_square as usize) != 0 {
                     // remove it from corresponding bitboard
                     self.captured_pieces_stack.push(bb_piece as u8);
+                    // add the captured piece to the hand
+                    self.bank[bb_piece] += 1;
                     self.remove_piece(opp_color as u8, bb_piece as u8, target_square as u8);
                     unsafe {
                         // remove piece from hash key
@@ -527,96 +545,96 @@ impl Position {
 
         // handle castling
         if castling != 0 {
-            if unsafe { OPTIONS.variant == Variant::Chess960 } {
-                if target_square > 40 {
-                    // white
-                    if target_square > source_square {
-                        let left_rook_square = self.bitboards[Piece::WhiteRook as usize].ls1b();
-                        // pop the rook from the bitboard
-                        self.bitboards[Piece::WhiteRook as usize].pop(left_rook_square as usize);
-                        let right_rook_square = self.bitboards[Piece::WhiteRook as usize].ls1b();
-                        // add the rook back
-                        self.bitboards[Piece::WhiteRook as usize].set(left_rook_square as usize);
+            // if unsafe { OPTIONS.variant == Variant::Chess960 } {
+            //     if target_square > 40 {
+            //         // white
+            //         if target_square > source_square {
+            //             let left_rook_square = self.bitboards[Piece::WhiteRook as usize].ls1b();
+            //             // pop the rook from the bitboard
+            //             self.bitboards[Piece::WhiteRook as usize].pop(left_rook_square as usize);
+            //             let right_rook_square = self.bitboards[Piece::WhiteRook as usize].ls1b();
+            //             // add the rook back
+            //             self.bitboards[Piece::WhiteRook as usize].set(left_rook_square as usize);
 
-                        // move the rook
-                        self.move_piece(
-                            0,
-                            Piece::WhiteRook as u8,
-                            Square::F1 as usize,
-                            right_rook_square as usize,
-                        );
+            //             // move the rook
+            //             self.move_piece(
+            //                 0,
+            //                 Piece::WhiteRook as u8,
+            //                 Square::F1 as usize,
+            //                 right_rook_square as usize,
+            //             );
 
-                        // hash rook
-                        unsafe {
-                            self.hash ^= ZOBRIST_KEYS[Piece::WhiteRook as usize][right_rook_square as usize];
-                            self.hash ^= ZOBRIST_KEYS[Piece::WhiteRook as usize][Square::F1 as usize];
-                        }
+            //             // hash rook
+            //             unsafe {
+            //                 self.hash ^= ZOBRIST_KEYS[Piece::WhiteRook as usize][right_rook_square as usize];
+            //                 self.hash ^= ZOBRIST_KEYS[Piece::WhiteRook as usize][Square::F1 as usize];
+            //             }
 
-                        self.rook_positions_stack.push(right_rook_square as usize);
-                    } else {
-                        let left_rook_square = self.bitboards[Piece::WhiteRook as usize].ls1b();
+            //             // self.rook_positions_stack.push(right_rook_square as usize);
+            //         } else {
+            //             let left_rook_square = self.bitboards[Piece::WhiteRook as usize].ls1b();
 
-                        // move the rook
-                        self.move_piece(
-                            0,
-                            Piece::WhiteRook as u8,
-                            Square::D1 as usize,
-                            left_rook_square as usize,
-                        );
+            //             // move the rook
+            //             self.move_piece(
+            //                 0,
+            //                 Piece::WhiteRook as u8,
+            //                 Square::D1 as usize,
+            //                 left_rook_square as usize,
+            //             );
 
-                        // hash rook
-                        unsafe {
-                            self.hash ^= ZOBRIST_KEYS[Piece::WhiteRook as usize][left_rook_square as usize];
-                            self.hash ^= ZOBRIST_KEYS[Piece::WhiteRook as usize][Square::D1 as usize];
-                        }
+            //             // hash rook
+            //             unsafe {
+            //                 self.hash ^= ZOBRIST_KEYS[Piece::WhiteRook as usize][left_rook_square as usize];
+            //                 self.hash ^= ZOBRIST_KEYS[Piece::WhiteRook as usize][Square::D1 as usize];
+            //             }
 
-                        self.rook_positions_stack.push(left_rook_square as usize);
-                    }
-                } else {
-                    // black
-                    if target_square > source_square {
-                        let left_rook_square = self.bitboards[Piece::BlackRook as usize].ls1b();
-                        // pop the rook from the bitboard
-                        self.bitboards[Piece::BlackRook as usize].pop(left_rook_square as usize);
-                        let right_rook_square = self.bitboards[Piece::BlackRook as usize].ls1b();
-                        // add the rook back
-                        self.bitboards[Piece::BlackRook as usize].set(left_rook_square as usize);
+            //             // self.rook_positions_stack.push(left_rook_square as usize);
+            //         }
+            //     } else {
+            //         // black
+            //         if target_square > source_square {
+            //             let left_rook_square = self.bitboards[Piece::BlackRook as usize].ls1b();
+            //             // pop the rook from the bitboard
+            //             self.bitboards[Piece::BlackRook as usize].pop(left_rook_square as usize);
+            //             let right_rook_square = self.bitboards[Piece::BlackRook as usize].ls1b();
+            //             // add the rook back
+            //             self.bitboards[Piece::BlackRook as usize].set(left_rook_square as usize);
 
-                        // move the rook
-                        self.move_piece(
-                            1,
-                            Piece::BlackRook as u8,
-                            Square::F8 as usize,
-                            right_rook_square as usize,
-                        );
+            //             // move the rook
+            //             self.move_piece(
+            //                 1,
+            //                 Piece::BlackRook as u8,
+            //                 Square::F8 as usize,
+            //                 right_rook_square as usize,
+            //             );
 
-                        // hash rook
-                        unsafe {
-                            self.hash ^= ZOBRIST_KEYS[Piece::BlackRook as usize][right_rook_square as usize];
-                            self.hash ^= ZOBRIST_KEYS[Piece::BlackRook as usize][Square::F8 as usize];
-                        }
+            //             // hash rook
+            //             unsafe {
+            //                 self.hash ^= ZOBRIST_KEYS[Piece::BlackRook as usize][right_rook_square as usize];
+            //                 self.hash ^= ZOBRIST_KEYS[Piece::BlackRook as usize][Square::F8 as usize];
+            //             }
 
-                        self.rook_positions_stack.push(right_rook_square as usize);
-                    } else {
-                        let left_rook_square = self.bitboards[Piece::BlackRook as usize].ls1b();
-                        // move the rook
-                        self.move_piece(
-                            1,
-                            Piece::BlackRook as u8,
-                            Square::D8 as usize,
-                            left_rook_square as usize,
-                        );
+            //             // self.rook_positions_stack.push(right_rook_square as usize);
+            //         } else {
+            //             let left_rook_square = self.bitboards[Piece::BlackRook as usize].ls1b();
+            //             // move the rook
+            //             self.move_piece(
+            //                 1,
+            //                 Piece::BlackRook as u8,
+            //                 Square::D8 as usize,
+            //                 left_rook_square as usize,
+            //             );
 
-                        // hash rook
-                        unsafe {
-                            self.hash ^= ZOBRIST_KEYS[Piece::BlackRook as usize][left_rook_square as usize];
-                            self.hash ^= ZOBRIST_KEYS[Piece::BlackRook as usize][Square::D8 as usize];
-                        }
+            //             // hash rook
+            //             unsafe {
+            //                 self.hash ^= ZOBRIST_KEYS[Piece::BlackRook as usize][left_rook_square as usize];
+            //                 self.hash ^= ZOBRIST_KEYS[Piece::BlackRook as usize][Square::D8 as usize];
+            //             }
 
-                        self.rook_positions_stack.push(left_rook_square as usize);
-                    }
-                }
-            } else {
+            //             // self.rook_positions_stack.push(left_rook_square as usize);
+            //         }
+            //     }
+            // } else {
             // move the rook
             match target_square {
                 62 => {
@@ -682,7 +700,7 @@ impl Position {
                 _ => panic!("Invalid castling move: {}", target_square),
             }
             }
-        }
+        // }
 
         // hash castling
         unsafe {
@@ -748,7 +766,7 @@ impl Position {
                         return false;
                     }
                 }, 
-                Variant::Standard => {
+                Variant::Standard | Variant::Crazyhouse => {
                     // check if the move is illegal
                     if self.is_attacked(self.bitboards[Piece::BlackKing as usize].ls1b() as usize, 0) {
                         // move is illegal
@@ -790,7 +808,7 @@ impl Position {
                         return false;
                     }
                 }, 
-                Variant::Standard => {
+                Variant::Standard | Variant::Crazyhouse => {
                     // check if the move is illegal
                     if self.is_attacked(self.bitboards[Piece::WhiteKing as usize].ls1b() as usize, 1) {
                         // move is illegal
@@ -865,28 +883,28 @@ impl Position {
 
         // check flags to determine how to proceed with undoing the move
         if castling != 0 {
-            if unsafe { OPTIONS.variant == Variant::Chess960 } {
-                let rook_square = self.rook_positions_stack.pop().unwrap();
-                match to {
-                    62 => {
-                        self.move_piece(0, Piece::WhiteKing as u8, from.into(), 62);
-                        self.move_piece(0, Piece::WhiteRook as u8, rook_square, 61);
-                    }
-                    58 => {
-                        self.move_piece(0, Piece::WhiteKing as u8, from.into(), 58);
-                        self.move_piece(0, Piece::WhiteRook as u8, rook_square, 59);
-                    }
-                    6 => {
-                        self.move_piece(1, Piece::BlackKing as u8, from.into(), 6);
-                        self.move_piece(1, Piece::BlackRook as u8, rook_square, 5);
-                    }
-                    2 => {
-                        self.move_piece(1, Piece::BlackKing as u8, from.into(), 2);
-                        self.move_piece(1, Piece::BlackRook as u8, rook_square, 3);
-                    }
-                    _ => panic!("Invalid castling move: {}", to)
-                }
-            } else {
+            // if unsafe { OPTIONS.variant == Variant::Chess960 } {
+            //     let rook_square = self.rook_positions_stack.pop().unwrap();
+            //     match to {
+            //         62 => {
+            //             self.move_piece(0, Piece::WhiteKing as u8, from.into(), 62);
+            //             self.move_piece(0, Piece::WhiteRook as u8, rook_square, 61);
+            //         }
+            //         58 => {
+            //             self.move_piece(0, Piece::WhiteKing as u8, from.into(), 58);
+            //             self.move_piece(0, Piece::WhiteRook as u8, rook_square, 59);
+            //         }
+            //         6 => {
+            //             self.move_piece(1, Piece::BlackKing as u8, from.into(), 6);
+            //             self.move_piece(1, Piece::BlackRook as u8, rook_square, 5);
+            //         }
+            //         2 => {
+            //             self.move_piece(1, Piece::BlackKing as u8, from.into(), 2);
+            //             self.move_piece(1, Piece::BlackRook as u8, rook_square, 3);
+            //         }
+            //         _ => panic!("Invalid castling move: {}", to)
+            //     }
+            // } else {
                 match to {
                     62 => {
                         self.move_piece(0, Piece::WhiteKing as u8, 60, 62);
@@ -906,7 +924,7 @@ impl Position {
                     }
                     _ => panic!("Invalid castling move: {}", to)
                 }
-            }
+            // }
         } else if enpassant != 0 {
             self.move_piece(self.side as u8, piece, from as usize, to as usize);
             if self.side == 0 {
@@ -916,10 +934,19 @@ impl Position {
             }
         } else if capture != 0 && promoted == 0 {
             let captured_piece = self.captured_pieces_stack.pop().unwrap();
+            if unsafe { OPTIONS.variant == Variant::Crazyhouse } {
+                self.bank[captured_piece as usize] -= 1;
+            } 
             self.move_piece(self.side as u8, piece, from as usize, to as usize);
             self.add_piece(opp_color as u8, captured_piece, to);
+
         } else if capture == 0 && promoted == 0 {
-            self.move_piece(self.side as u8, piece, from as usize, to as usize);
+            if unsafe { OPTIONS.variant == Variant::Crazyhouse } && from == Square::NoSquare as u8 {
+                self.bank[piece as usize] += 1;
+                self.remove_piece(self.side as u8, piece, to);
+            } else {
+                self.move_piece(self.side as u8, piece, from as usize, to as usize);
+            }
         } else {
             if self.side == 0 {
                 self.add_piece(0, Piece::WhitePawn as u8, from);
@@ -1034,6 +1061,15 @@ impl Position {
         // print checks if variant is three check
         if unsafe { OPTIONS.variant == Variant::ThreeCheck } {
             println!("   Checks: White: {} Black: {}", self.checks[0], self.checks[1]);
+        } else if unsafe { OPTIONS.variant == Variant::Crazyhouse } {
+            // convert bank to pieces
+            let mut bank = String::new();
+            for i in 0..12 {
+                if self.bank[i] != 0 {
+                    bank.push_str(&format!("{}{}", self.bank[i], pieces[i]));
+                }
+            }
+            println!("   Bank: {}", bank);
         }
     }
 

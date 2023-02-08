@@ -5,7 +5,7 @@ use crate::r#move::encode::*;
 pub struct Move(pub u32);
 
 pub struct MoveList {
-    pub moves: [u32; 256],
+    pub moves: [u32; 447],
     pub count: i32,
 }
 
@@ -44,7 +44,7 @@ impl Move {
 impl MoveList {
     pub fn new() -> MoveList {
         MoveList {
-            moves: [0; 256],
+            moves: [0; 447],
             count: 0,
         }
     }

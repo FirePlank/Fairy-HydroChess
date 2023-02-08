@@ -659,7 +659,7 @@ impl Searcher {
             // if both kings on 8th, its draw
             let black_idx = position.bitboards[Piece::BlackKing as usize].ls1b() as usize;
 
-            // no legal moves means stalemate as long as no kings are on the 8th ran
+            // no legal moves means stalemate as long as no kings are on the 8th rank
             // since there is no checkmate in racing kings
             if legal_moves == 0 {
                 if black_idx < 8 && (position.bitboards[Piece::WhiteKing as usize].ls1b() as usize) < 8 {

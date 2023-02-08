@@ -24,31 +24,28 @@ pub fn generate_moves(position: &mut Position, move_list: &mut MoveList) {
             // generate white pawn moves
             if position.side == Side::WHITE {
                 // add moves from bank
-                for i in 0..6 {
-                    let piecer = position.bank[i];
-                    if piecer >= 1 {
-                        // loop over all available squares on the board
-                        // get 0s from both occupancy board
-                        
-                        let mut empty_squares = Bitboard(!both.0);
-                        while empty_squares.0 != 0 {
-                            // get least significant 1st bit index
-                            target_square = empty_squares.ls1b() as usize;
-                            // pop LS1B in bitboard
-                            empty_squares.pop(target_square);
-
-                            // add move into a move list
-                            move_list.add(encode_move(
-                                Square::NoSquare as u8,
-                                target_square as u8,
-                                piecer as u8,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                            ));
-                        }
+                if piece >= 6 && position.bank[piece] >= 1 {
+                    println!("{}", piece);
+                    // loop over all available squares on the board
+                    // get 0s from both occupancy board
+                    
+                    let mut empty_squares = Bitboard(!both.0);
+                    while empty_squares.0 != 0 {
+                        // get least significant 1st bit index
+                        target_square = empty_squares.ls1b() as usize;
+                        // pop LS1B in bitboard
+                        empty_squares.pop(target_square);
+                        // add move into a move list
+                        move_list.add(encode_move(
+                            Square::NoSquare as u8,
+                            target_square as u8,
+                            piece as u8 - 6,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                        ));
                     }
                 }
 
@@ -273,31 +270,29 @@ pub fn generate_moves(position: &mut Position, move_list: &mut MoveList) {
             // generate black pawn moves
             } else {
                 // add moves from bank
-                for i in 6..12 {
-                    let piecer = position.bank[i];
-                    if piecer >= 1 {
-                        // loop over all available squares on the board
-                        // get 0s from both occupancy board
-                        
-                        let mut empty_squares = Bitboard(!both.0);
-                        while empty_squares.0 != 0 {
-                            // get least significant 1st bit index
-                            target_square = empty_squares.ls1b() as usize;
-                            // pop LS1B in bitboard
-                            empty_squares.pop(target_square);
+                if piece < 6 && position.bank[piece] >= 1 {
+                    // loop over all available squares on the board
+                    // get 0s from both occupancy board
 
-                            // add move into a move list
-                            move_list.add(encode_move(
-                                Square::NoSquare as u8,
-                                target_square as u8,
-                                piecer as u8,
-                                0,
-                                0,
-                                0,
-                                0,
-                                0,
-                            ));
-                        }
+                    let mut empty_squares = Bitboard(!both.0);
+                    while empty_squares.0 != 0 {
+                        // get least significant 1st bit index
+                        target_square = empty_squares.ls1b() as usize;
+                        // pop LS1B in bitboard
+                        empty_squares.pop(target_square);
+                        println!("{}", target_square == Square::A6 as usize);
+
+                        // add move into a move list
+                        move_list.add(encode_move(
+                            Square::NoSquare as u8,
+                            target_square as u8,
+                            piece as u8 + 6,
+                            0,
+                            0,
+                            0,
+                            0,
+                            0,
+                        ));
                     }
                 }
 

@@ -25,7 +25,6 @@ pub fn generate_moves(position: &mut Position, move_list: &mut MoveList) {
             if position.side == Side::WHITE {
                 // add moves from bank
                 if piece >= 6 && position.bank[piece] >= 1 {
-                    println!("{}", piece);
                     // loop over all available squares on the board
                     // get 0s from both occupancy board
                     
@@ -35,16 +34,20 @@ pub fn generate_moves(position: &mut Position, move_list: &mut MoveList) {
                         target_square = empty_squares.ls1b() as usize;
                         // pop LS1B in bitboard
                         empty_squares.pop(target_square);
+                        // if piece is a pawn, we can't place it on the 1st or 8th rank
+                        if piece == Piece::BlackPawn as usize && (target_square < 8 || target_square > 55) {
+                            continue;
+                        }
                         // add move into a move list
                         move_list.add(encode_move(
-                            Square::NoSquare as u8,
+                            Square::A5 as u8,
                             target_square as u8,
                             piece as u8 - 6,
                             0,
+                            1,
                             0,
                             0,
-                            0,
-                            0,
+                            1, // <--- create an impossible situation in a normal game (cant castle while capturing) to signal a bank move
                         ));
                     }
                 }
@@ -280,18 +283,20 @@ pub fn generate_moves(position: &mut Position, move_list: &mut MoveList) {
                         target_square = empty_squares.ls1b() as usize;
                         // pop LS1B in bitboard
                         empty_squares.pop(target_square);
-                        println!("{}", target_square == Square::A6 as usize);
-
+                        // if piece is a pawn, we can't place it on the 1st or 8th rank
+                        if piece == Piece::WhitePawn as usize && (target_square < 8 || target_square > 55) {
+                            continue;
+                        }
                         // add move into a move list
                         move_list.add(encode_move(
-                            Square::NoSquare as u8,
+                            Square::A5 as u8,
                             target_square as u8,
                             piece as u8 + 6,
                             0,
+                            1,
                             0,
                             0,
-                            0,
-                            0,
+                            1, // <--- create an impossible situation in a normal game (cant castle while capturing) to signal a bank move
                         ));
                     }
                 }

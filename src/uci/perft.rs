@@ -3,7 +3,7 @@ use crate::r#move::encode::*;
 use crate::r#move::movegen::*;
 use crate::search::OPTIONS;
 use crate::variants::antichess;
-use crate::variants::chess960;
+use crate::variants::crazyhouse;
 
 use std::time::Instant;
 
@@ -24,8 +24,8 @@ pub fn perft_driver(position: &mut Position, depth: u32) {
     let mut move_list = MoveList::new();
     let variant = unsafe { &OPTIONS.variant };
     match variant {
-        Variant::Chess960 => chess960::generate_moves(position, &mut move_list),
         Variant::Suicide => { move_list = antichess::generate_moves(position) },
+        Variant::Crazyhouse => crazyhouse::generate_moves(position, &mut move_list),
         _ => position.generate_pseudo_moves(&mut move_list)
     }
 
@@ -54,8 +54,8 @@ pub fn perft_test(position: &mut Position, depth: u32) {
     let mut move_list = MoveList::new();
     let variant = unsafe { &OPTIONS.variant };
     match variant {
-        Variant::Chess960 => chess960::generate_moves(position, &mut move_list),
         Variant::Suicide => { move_list = antichess::generate_moves(position) },
+        Variant::Crazyhouse => crazyhouse::generate_moves(position, &mut move_list),
         _ => position.generate_pseudo_moves(&mut move_list)
     }
 
@@ -89,13 +89,26 @@ pub fn perft_test(position: &mut Position, depth: u32) {
         let source = source(move_);
         let target = target(move_);
         let promoted = promoted(move_);
-        println!(
-            "    move: {}{}{}   nodes: {}",
-            SQUARE_COORDS[source as usize],
-            SQUARE_COORDS[target as usize],
-            PROMOTED_PIECES[promoted as usize],
-            old_nodes,
-        );
+
+        if castling(move_) != 0 && capture(move_) != 0 {
+            // get moved piece type
+            let piece = get_piece(move_);
+            // crazyhouse move
+            println!(
+                "    move: {}@{}    nodes: {}",
+                ASCII_PIECES[piece as usize],
+                SQUARE_COORDS[target as usize],
+                old_nodes,
+            );
+        } else {
+            println!(
+                "    move: {}{}{}   nodes: {}",
+                SQUARE_COORDS[source as usize],
+                SQUARE_COORDS[target as usize],
+                PROMOTED_PIECES[promoted as usize],
+                old_nodes,
+            );
+        }
     }
 
     // print results

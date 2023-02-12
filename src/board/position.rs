@@ -24,12 +24,11 @@ pub enum Square {
 // square string list
 #[allow(dead_code)]
 #[rustfmt::skip]
-pub const SQUARE_COORDS: [&str; 65] = [
+pub const SQUARE_COORDS: [&str; 64] = [
     "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8", "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7",
     "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6", "a5", "b5", "c5", "d5", "e5", "f5", "g5", "h5",
     "a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4", "a3", "b3", "c3", "d3", "e3", "f3", "g3", "h3",
     "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2", "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1",
-    "NoSquare",
 ];
 
 // ASCII pieces
@@ -419,7 +418,7 @@ impl Position {
         // }
 
 
-        if unsafe { OPTIONS.variant == Variant::Crazyhouse } && source_square == Square::NoSquare as u8 {
+        if castling != 0 && capture != 0 && self.bank[piece as usize] >= 1 {
             // add piece from hand
             self.add_piece(self.side as u8, piece as u8, target_square as u8);
             self.bank[piece as usize] -= 1;
@@ -428,32 +427,22 @@ impl Position {
                 self.hash ^= ZOBRIST_KEYS[piece as usize][target_square as usize];
             }
         } else {
-            // move piece
-            self.move_piece(
-                self.side as u8,
-                piece as u8,
-                target_square as usize,
-                source_square as usize,
-            );
 
-            // hash piece
-            unsafe {
-                // remove piece from source square in hash key
-                self.hash ^= ZOBRIST_KEYS[piece as usize][source_square as usize];
-                // add piece to target square in hash key
-                self.hash ^= ZOBRIST_KEYS[piece as usize][target_square as usize];
-            }
+        // move piece
+        self.move_piece(
+            self.side as u8,
+            piece as u8,
+            target_square as usize,
+            source_square as usize,
+        );
+
+        // hash piece
+        unsafe {
+            // remove piece from source square in hash key
+            self.hash ^= ZOBRIST_KEYS[piece as usize][source_square as usize];
+            // add piece to target square in hash key
+            self.hash ^= ZOBRIST_KEYS[piece as usize][target_square as usize];
         }
-
-        // update scores
-        // if piece == 0 || piece == Piece::BlackPawn as u8 {
-        //     if capture != 0 {
-        //         self.calculate_isolated(target_square, false);
-        //     }
-        //     self.calculate_passed(target_square, false);
-        // } else if piece == Piece::WhiteRook as u8 || piece == Piece::BlackRook as u8 {
-        //     self.calculate_rook(target_square, false);
-        // }
 
         if capture != 0 {
             // pick up bitboard piece index ranges depending on side
@@ -483,12 +472,12 @@ impl Position {
                         // remove piece from hash key
                         self.hash ^= ZOBRIST_KEYS[bb_piece as usize][target_square as usize];
                     }
-                    
+
                     break;
                 }
             }
         }
-        
+
         // handle pawn promotions
         if promoted != 0 {
             // erase the pawn from the target square and remove from hash key
@@ -700,6 +689,19 @@ impl Position {
                 _ => panic!("Invalid castling move: {}", target_square),
             }
             }
+
+        }
+
+        // update scores
+        // if piece == 0 || piece == Piece::BlackPawn as u8 {
+        //     if capture != 0 {
+        //         self.calculate_isolated(target_square, false);
+        //     }
+        //     self.calculate_passed(target_square, false);
+        // } else if piece == Piece::WhiteRook as u8 || piece == Piece::BlackRook as u8 {
+        //     self.calculate_rook(target_square, false);
+        // }
+
         // }
 
         // hash castling
@@ -871,6 +873,15 @@ impl Position {
         self.enpassant = self.en_passant_stack.pop().unwrap();
         self.hash = self.hash_stack.pop().unwrap();
 
+        if castling != 0 && capture != 0 {
+            self.bank[piece as usize] += 1;
+            self.remove_piece(self.side as u8, piece, to);
+            if self.side == 1 {
+                self.fullmove -= 1;
+            }
+            return;
+        }
+
         // update score
         // if piece == 0 || piece == Piece::BlackPawn as u8 {
         //     if capture != 0 {
@@ -941,12 +952,7 @@ impl Position {
             self.add_piece(opp_color as u8, captured_piece, to);
 
         } else if capture == 0 && promoted == 0 {
-            if unsafe { OPTIONS.variant == Variant::Crazyhouse } && from == Square::NoSquare as u8 {
-                self.bank[piece as usize] += 1;
-                self.remove_piece(self.side as u8, piece, to);
-            } else {
-                self.move_piece(self.side as u8, piece, from as usize, to as usize);
-            }
+            self.move_piece(self.side as u8, piece, from as usize, to as usize);
         } else {
             if self.side == 0 {
                 self.add_piece(0, Piece::WhitePawn as u8, from);
@@ -1083,104 +1089,128 @@ impl Position {
         for x in fen.split_whitespace() {
             if index == 0 {
                 for i in x.chars() {
-                    match i {
-                        '1' => {
-                            file += 1;
-                            square = rank * 8 + file;
+                    if rank == 8 {
+                        // crazyhouse bank
+                        if unsafe { OPTIONS.variant == Variant::Crazyhouse } {
+                            let piece = match i {
+                                'P' => Piece::BlackPawn,
+                                'N' => Piece::BlackKnight,
+                                'B' => Piece::BlackBishop,
+                                'R' => Piece::BlackRook,
+                                'Q' => Piece::BlackQueen,
+                                'p' => Piece::WhitePawn,
+                                'n' => Piece::WhiteKnight,
+                                'b' => Piece::WhiteBishop,
+                                'r' => Piece::WhiteRook,
+                                'q' => Piece::WhiteQueen,
+                                _ => panic!("Invalid piece in FEN string: {}", i),
+                            };
+                            position.bank[piece as usize] += 1;
+                        } else {
+                            panic!("Invalid FEN string");
                         }
-                        '2' => {
-                            file += 2;
-                            square = rank * 8 + file;
+                    } 
+                    else {
+                        match i {
+                            '1' => {
+                                file += 1;
+                                square = rank * 8 + file;
+                            }
+                            '2' => {
+                                file += 2;
+                                square = rank * 8 + file;
+                            }
+                            '3' => {
+                                file += 3;
+                                square = rank * 8 + file;
+                            }
+                            '4' => {
+                                file += 4;
+                                square = rank * 8 + file;
+                            }
+                            '5' => {
+                                file += 5;
+                                square = rank * 8 + file;
+                            }
+                            '6' => {
+                                file += 6;
+                                square = rank * 8 + file;
+                            }
+                            '7' => {
+                                file += 7;
+                                square = rank * 8 + file;
+                            }
+                            '8' => {
+                                file += 8;
+                                square = rank * 8 + file;
+                            }
+                            'P' => {
+                                position.bitboards[Piece::WhitePawn as usize].set(square);
+                                file += 1;
+                                square = rank * 8 + file;
+                            }
+                            'N' => {
+                                position.bitboards[Piece::WhiteKnight as usize].set(square);
+                                file += 1;
+                                square = rank * 8 + file;
+                            }
+                            'B' => {
+                                position.bitboards[Piece::WhiteBishop as usize].set(square);
+                                file += 1;
+                                square = rank * 8 + file;
+                            }
+                            'R' => {
+                                position.bitboards[Piece::WhiteRook as usize].set(square);
+                                file += 1;
+                                square = rank * 8 + file;
+                            }
+                            'Q' => {
+                                position.bitboards[Piece::WhiteQueen as usize].set(square);
+                                file += 1;
+                                square = rank * 8 + file;
+                            }
+                            'K' => {
+                                position.bitboards[Piece::WhiteKing as usize].set(square);
+                                file += 1;
+                                square = rank * 8 + file;
+                            }
+                            'p' => {
+                                position.bitboards[Piece::BlackPawn as usize].set(square);
+                                file += 1;
+                                square = rank * 8 + file;
+                            }
+                            'n' => {
+                                position.bitboards[Piece::BlackKnight as usize].set(square);
+                                file += 1;
+                                square = rank * 8 + file;
+                            }
+                            'b' => {
+                                position.bitboards[Piece::BlackBishop as usize].set(square);
+                                file += 1;
+                                square = rank * 8 + file;
+                            }
+                            'r' => {
+                                position.bitboards[Piece::BlackRook as usize].set(square);
+                                file += 1;
+                                square = rank * 8 + file;
+                            }
+                            'q' => {
+                                position.bitboards[Piece::BlackQueen as usize].set(square);
+                                file += 1;
+                                square = rank * 8 + file;
+                            }
+                            'k' => {
+                                position.bitboards[Piece::BlackKing as usize].set(square);
+                                file += 1;
+                                square = rank * 8 + file;
+                            }
+                            '/' => {
+                                rank += 1;
+                                file = 0;
+                            }
+                            _ => (),
                         }
-                        '3' => {
-                            file += 3;
-                            square = rank * 8 + file;
-                        }
-                        '4' => {
-                            file += 4;
-                            square = rank * 8 + file;
-                        }
-                        '5' => {
-                            file += 5;
-                            square = rank * 8 + file;
-                        }
-                        '6' => {
-                            file += 6;
-                            square = rank * 8 + file;
-                        }
-                        '7' => {
-                            file += 7;
-                            square = rank * 8 + file;
-                        }
-                        '8' => {
-                            file += 8;
-                            square = rank * 8 + file;
-                        }
-                        'P' => {
-                            position.bitboards[Piece::WhitePawn as usize].set(square);
-                            file += 1;
-                            square = rank * 8 + file;
-                        }
-                        'N' => {
-                            position.bitboards[Piece::WhiteKnight as usize].set(square);
-                            file += 1;
-                            square = rank * 8 + file;
-                        }
-                        'B' => {
-                            position.bitboards[Piece::WhiteBishop as usize].set(square);
-                            file += 1;
-                            square = rank * 8 + file;
-                        }
-                        'R' => {
-                            position.bitboards[Piece::WhiteRook as usize].set(square);
-                            file += 1;
-                            square = rank * 8 + file;
-                        }
-                        'Q' => {
-                            position.bitboards[Piece::WhiteQueen as usize].set(square);
-                            file += 1;
-                            square = rank * 8 + file;
-                        }
-                        'K' => {
-                            position.bitboards[Piece::WhiteKing as usize].set(square);
-                            file += 1;
-                            square = rank * 8 + file;
-                        }
-                        'p' => {
-                            position.bitboards[Piece::BlackPawn as usize].set(square);
-                            file += 1;
-                            square = rank * 8 + file;
-                        }
-                        'n' => {
-                            position.bitboards[Piece::BlackKnight as usize].set(square);
-                            file += 1;
-                            square = rank * 8 + file;
-                        }
-                        'b' => {
-                            position.bitboards[Piece::BlackBishop as usize].set(square);
-                            file += 1;
-                            square = rank * 8 + file;
-                        }
-                        'r' => {
-                            position.bitboards[Piece::BlackRook as usize].set(square);
-                            file += 1;
-                            square = rank * 8 + file;
-                        }
-                        'q' => {
-                            position.bitboards[Piece::BlackQueen as usize].set(square);
-                            file += 1;
-                            square = rank * 8 + file;
-                        }
-                        'k' => {
-                            position.bitboards[Piece::BlackKing as usize].set(square);
-                            file += 1;
-                            square = rank * 8 + file;
-                        }
-                        '/' => {
-                            rank += 1;
-                            file = 0;
-                        }
-                        _ => (),
+    
                     }
                 }
             } else if index == 1 {

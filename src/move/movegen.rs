@@ -67,19 +67,27 @@ impl MoveList {
             let enpassant = enpassant(move_);
             let castling = castling(move_);
 
-            // print moves
-            println!(
-                "    {}{}{}   {}          {}         {}         {}            {}           {}",
-                SQUARE_COORDS[source as usize],
-                SQUARE_COORDS[target as usize],
-                PROMOTED_PIECES[promoted as usize],
-                ASCII_PIECES[piece as usize],
-                capture,
-                double,
-                enpassant,
-                castling,
-                promoted
-            );
+            if castling != 0 && capture != 0 {
+                // crazyhouse move due to impossibility of castling capture
+                println!(
+                    "    @{}    {}",
+                    SQUARE_COORDS[target as usize],
+                    ASCII_PIECES[piece as usize],
+                );
+            } else {
+                println!(
+                    "    {}{}{}   {}          {}         {}         {}            {}           {}",
+                    SQUARE_COORDS[source as usize],
+                    SQUARE_COORDS[target as usize],
+                    PROMOTED_PIECES[promoted as usize],
+                    ASCII_PIECES[piece as usize],
+                    capture,
+                    double,
+                    enpassant,
+                    castling,
+                    promoted
+                );
+            }
         }
         // print total number of moves
         println!("\n    Total number of moves: {}", self.count);

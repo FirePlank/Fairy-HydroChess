@@ -273,10 +273,13 @@ pub fn parse_position(cmd: &str) -> Position {
     // parse UCI "fen" command
     } else if next == "fen" {
         // make sure "fen" command is available within command string
-        let fen = split_cmd.next().unwrap_or_else(silent).to_string()+" "+
+        let mut fen = split_cmd.next().unwrap_or_else(silent).to_string()+" "+
         &(split_cmd.next().unwrap_or_else(silent)).to_string()+" "+&(split_cmd.next().unwrap_or_else(silent)).to_string()+" "+
         &(split_cmd.next().unwrap_or_else(silent)).to_string()+" "+&(split_cmd.next().unwrap_or_else(silent)).to_string()+" "+
         &(split_cmd.next().unwrap_or_else(silent)).to_string();
+
+        // for crazyhouse
+        fen = fen.replace("[", "/").replace("]", "");
 
         // check if any of the fen assignments failed
         if fen.ends_with(".") {
